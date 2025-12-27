@@ -143,10 +143,10 @@
         <div class="amount" id="monthTotal">฿0.00</div>
       </div>
 
-      <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+      <input type="file" id="fileInput" accept="image/*" style="display: none;">
       <button class="scan-btn" id="scanBtn" onclick="document.getElementById('fileInput').click()">
         <span style="font-size: 20px;">📷</span>
-        <span>Scan Receipt</span>
+        <span>Scan Receipt (Camera or Gallery)</span>
       </button>
       <div class="error-msg hidden" id="errorMsg"></div>
 
@@ -952,7 +952,7 @@
         errorMsg.classList.remove('hidden');
       } finally {
         btn.classList.remove('scanning');
-        btn.innerHTML = '<span style="font-size: 20px;">📷</span><span>Scan Receipt</span>';
+        btn.innerHTML = '<span style="font-size: 20px;">📷</span><span>Scan Receipt (Camera or Gallery)</span>';
         e.target.value = '';
       }
     });
