@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Expenses">
+  <meta name="theme-color" content="#0f172a">
+  <title>Expense Tracker Pro</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; color: white; padding-bottom: 80px; }
+    .container { max-width: 420px; margin: 0 auto; padding: 16px; }
+    
+    /* Navigation */
+    .nav { position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; border-top: 1px solid #334155; display: flex; justify-content: space-around; padding: 8px 0; z-index: 100; }
+    .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 16px; color: #64748b; font-size: 10px; cursor: pointer; transition: color 0.2s; }
+    .nav-item.active { color: #a78bfa; }
+    .nav-item span:first-child { font-size: 20px; }
+    
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+    
+    /* Common */
+    .header { text-align: center; margin-bottom: 20px; padding-top: 8px; }
+    .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .header p { font-size: 12px; color: #94a3b8; }
+    .card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+    .card-title { font-size: 12px; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-box { background: rgba(51, 65, 85, 0.3); border-radius: 12px; padding: 12px; }
+    .stat-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+    .stat-value { font-size: 18px; font-weight: 700; }
+    .stat-change { font-size: 11px; margin-top: 4px; }
+    .stat-change.up { color: #f87171; }
+    .stat-change.down { color: #4ade80; }
+    .stat-change.neutral { color: #94a3b8; }
+    
+    /* Total Card */
+    .total-card { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); border-radius: 16px; padding: 16px 20px; margin-bottom: 20px; }
+    .total-card .label { font-size: 12px; color: #c4b5fd; margin-bottom: 2px; }
+    .total-card .amount { font-size: 28px; font-weight: 700; }
+    
+    /* Form */
+    .scan-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; border: 2px dashed #475569; border-radius: 12px; background: transparent; color: #cbd5e1; font-size: 15px; font-weight: 500; cursor: pointer; margin-bottom: 16px; transition: all 0.2s; }
+    .scan-btn:active { border-color: #7c3aed; background: rgba(124, 58, 237, 0.1); }
+    .scan-btn.scanning { border-color: #7c3aed; background: rgba(124, 58, 237, 0.1); color: #a78bfa; }
+    .spinner { width: 18px; height: 18px; border: 2px solid #7c3aed; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-msg { color: #f87171; font-size: 12px; text-align: center; margin-top: -8px; margin-bottom: 12px; }
+    .form-card { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 16px; padding: 12px; margin-bottom: 20px; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .form-row:last-child { margin-bottom: 0; }
+    input, select { background: rgba(51, 65, 85, 0.5); border: none; border-radius: 12px; padding: 12px 14px; color: white; font-size: 16px; outline: none; }
+    input:focus, select:focus { box-shadow: 0 0 0 2px #7c3aed; }
+    input::placeholder { color: #64748b; }
+    input[type="number"], input[type="text"] { flex: 1; min-width: 0; }
+    select { padding: 12px 8px; }
+    .add-btn { background: #7c3aed; border: none; border-radius: 12px; padding: 12px 20px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .add-btn:active { background: #6d28d9; }
+    
+    /* Expense List */
+    .expense-list { display: flex; flex-direction: column; gap: 8px; }
+    .expense-item { background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.2s; }
+    .expense-item:active { background: rgba(51, 65, 85, 0.5); }
+    .expense-item .emoji { font-size: 20px; }
+    .expense-item .details { flex: 1; min-width: 0; }
+    .expense-item .desc { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .expense-item .date { font-size: 12px; color: #94a3b8; }
+    .expense-item .amount { font-size: 14px; font-weight: 600; }
+    .expense-item .delete-btn { background: rgba(239, 68, 68, 0.2); color: #f87171; border: none; border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .empty-state { text-align: center; color: #64748b; padding: 24px; font-size: 14px; }
+    .clear-btn { display: block; width: 100%; background: transparent; border: none; color: #64748b; font-size: 12px; padding: 12px; margin-top: 16px; cursor: pointer; }
+    
+    /* Charts */
+    .chart-container { position: relative; height: 200px; margin: 12px 0; }
+    .chart-container-small { position: relative; height: 150px; margin: 12px 0; }
+    
+    /* Category List */
+    .category-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #334155; }
+    .category-row:last-child { border-bottom: none; }
+    .category-info { display: flex; align-items: center; gap: 10px; }
+    .category-bar { height: 8px; background: #334155; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+    .category-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+    
+    /* Period Selector */
+    .period-selector { display: flex; gap: 8px; margin-bottom: 16px; }
+    .period-btn { flex: 1; padding: 10px; border: 1px solid #334155; border-radius: 10px; background: transparent; color: #94a3b8; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .period-btn.active { background: #7c3aed; border-color: #7c3aed; color: white; }
+    
+    /* Insights */
+    .insight-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #334155; }
+    .insight-item:last-child { border-bottom: none; }
+    .insight-icon { font-size: 24px; }
+    .insight-text { font-size: 13px; color: #cbd5e1; line-height: 1.4; }
+    .insight-text strong { color: white; }
+    
+    /* Alerts */
+    .alert-card { border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+    .alert-card.warning { background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.3); }
+    .alert-card.danger { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .alert-card.success { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); }
+    .alert-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .alert-header .icon { font-size: 24px; }
+    .alert-header .title { font-weight: 600; font-size: 14px; }
+    .alert-card.warning .title { color: #fbbf24; }
+    .alert-card.danger .title { color: #f87171; }
+    .alert-card.success .title { color: #4ade80; }
+    .alert-body { font-size: 13px; color: #cbd5e1; line-height: 1.5; }
+    .alert-body strong { color: white; }
+    .alert-tip { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: #94a3b8; }
+    .alert-tip strong { color: #4ade80; }
+    
+    /* Savings Goal */
+    .savings-card { background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+    .savings-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .savings-header .icon { font-size: 24px; }
+    .savings-header .title { font-weight: 600; font-size: 14px; color: #4ade80; }
+    .savings-amount { font-size: 28px; font-weight: 700; color: #4ade80; margin-bottom: 8px; }
+    .savings-text { font-size: 13px; color: #cbd5e1; line-height: 1.5; }
+    
+    .recommendation-list { margin-top: 12px; }
+    .recommendation-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; font-size: 12px; color: #cbd5e1; }
+    .recommendation-item .bullet { color: #4ade80; }
+    
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- Add Expense Page -->
+  <div class="page active" id="page-add">
+    <div class="container">
+      <div class="header">
+        <h1>Expense Tracker</h1>
+        <p>Scan receipts or add manually</p>
+      </div>
+
+      <div class="total-card">
+        <div class="label">Total This Month</div>
+        <div class="amount" id="monthTotal">฿0.00</div>
+      </div>
+
+      <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+      <button class="scan-btn" id="scanBtn" onclick="document.getElementById('fileInput').click()">
+        <span style="font-size: 20px;">📷</span>
+        <span>Scan Receipt</span>
+      </button>
+      <div class="error-msg hidden" id="errorMsg"></div>
+
+      <div class="form-card">
+        <div class="form-row">
+          <input type="number" id="amountInput" placeholder="Amount" inputmode="decimal">
+          <select id="categorySelect">
+            <option value="Food">🍜 Food</option>
+            <option value="Transport">🚗 Transport</option>
+            <option value="Shopping">🛒 Shopping</option>
+            <option value="Bills">📄 Bills</option>
+            <option value="Entertainment">🎬 Entertainment</option>
+            <option value="Health">💊 Health</option>
+            <option value="Other">📌 Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <input type="text" id="descInput" placeholder="Description (optional)">
+          <button class="add-btn" onclick="addExpense()">Add</button>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-bottom: 12px;">Recent Expenses</div>
+      <div class="expense-list" id="expenseList">
+        <div class="empty-state">No expenses yet</div>
+      </div>
+      <button class="clear-btn hidden" id="clearBtn" onclick="clearAll()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Weekly Summary Page -->
+  <div class="page" id="page-weekly">
+    <div class="container">
+      <div class="header">
+        <h1>Weekly Summary</h1>
+        <p id="weekRange">This Week</p>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">This Week</div>
+          <div class="stat-value" id="weekTotal">฿0</div>
+          <div class="stat-change neutral" id="weekChange">-</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Daily Average</div>
+          <div class="stat-value" id="weekAvg">฿0</div>
+          <div class="stat-label" style="margin-top: 4px;" id="weekDays">0 days</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-title">Daily Spending</div>
+        <div class="chart-container">
+          <canvas id="weeklyChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Top Categories</div>
+        <div id="weekCategories"></div>
+      </div>
+
+      <div id="weeklyAlerts"></div>
+      
+      <div id="weeklySavings"></div>
+    </div>
+  </div>
+
+  <!-- Monthly Summary Page -->
+  <div class="page" id="page-monthly">
+    <div class="container">
+      <div class="header">
+        <h1>Monthly Summary</h1>
+        <p id="monthName">December 2025</p>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">This Month</div>
+          <div class="stat-value" id="monthTotalStat">฿0</div>
+          <div class="stat-change neutral" id="monthChange">-</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Transactions</div>
+          <div class="stat-value" id="monthTxCount">0</div>
+          <div class="stat-label" style="margin-top: 4px;" id="monthAvgTx">Avg ฿0/tx</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-title">Weekly Breakdown</div>
+        <div class="chart-container">
+          <canvas id="monthlyChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Category Breakdown</div>
+        <div id="monthCategories"></div>
+      </div>
+
+      <div id="monthlyAlerts"></div>
+      
+      <div id="monthlySavings"></div>
+    </div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div class="page" id="page-dashboard">
+    <div class="container">
+      <div class="header">
+        <h1>Dashboard</h1>
+        <p>Your spending insights</p>
+      </div>
+
+      <div class="period-selector">
+        <button class="period-btn active" onclick="setDashboardPeriod('week')">Week</button>
+        <button class="period-btn" onclick="setDashboardPeriod('month')">Month</button>
+        <button class="period-btn" onclick="setDashboardPeriod('all')">All Time</button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-label">Total Spent</div>
+          <div class="stat-value" id="dashTotal">฿0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Transactions</div>
+          <div class="stat-value" id="dashTxCount">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Biggest Expense</div>
+          <div class="stat-value" id="dashBiggest">฿0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Average</div>
+          <div class="stat-value" id="dashAvg">฿0</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <div class="card-title">Spending by Category</div>
+        <div class="chart-container">
+          <canvas id="categoryPieChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Spending Trend</div>
+        <div class="chart-container">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">💡 Insights</div>
+        <div id="insights"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-item active" onclick="showPage('add')">
+      <span>➕</span>
+      <span>Add</span>
+    </div>
+    <div class="nav-item" onclick="showPage('weekly')">
+      <span>📅</span>
+      <span>Weekly</span>
+    </div>
+    <div class="nav-item" onclick="showPage('monthly')">
+      <span>📆</span>
+      <span>Monthly</span>
+    </div>
+    <div class="nav-item" onclick="showPage('dashboard')">
+      <span>📊</span>
+      <span>Dashboard</span>
+    </div>
+  </nav>
+
+  <script>
+    const emojis = { Food: '🍜', Transport: '🚗', Shopping: '🛒', Bills: '📄', Entertainment: '🎬', Health: '💊', Other: '📌' };
+    const colors = { Food: '#f97316', Transport: '#3b82f6', Shopping: '#ec4899', Bills: '#8b5cf6', Entertainment: '#eab308', Health: '#22c55e', Other: '#6b7280' };
+    let expenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+    let selectedId = null;
+    let dashboardPeriod = 'week';
+    let charts = {};
+
+    function save() { localStorage.setItem('expenses', JSON.stringify(expenses)); }
+
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      document.querySelectorAll('.nav-item')[['add', 'weekly', 'monthly', 'dashboard'].indexOf(page)].classList.add('active');
+      
+      if (page === 'weekly') renderWeekly();
+      if (page === 'monthly') renderMonthly();
+      if (page === 'dashboard') renderDashboard();
+    }
+
+    function getDateKey(date) {
+      return date.toISOString().split('T')[0];
+    }
+
+    function parseExpenseDate(exp) {
+      const [day, month] = exp.date.split(' ');
+      const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+      const year = new Date().getFullYear();
+      return new Date(year, months[month], parseInt(day));
+    }
+
+    function getWeekStart(date) {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      return new Date(d.setDate(diff));
+    }
+
+    function formatCurrency(num) {
+      return '฿' + num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
+    // Add Page
+    function renderAddPage() {
+      const now = new Date();
+      const currentMonth = now.toLocaleDateString('en-GB', { month: 'short' });
+      const monthTotal = expenses.filter(e => e.date.includes(currentMonth)).reduce((s, e) => s + e.amount, 0);
+      document.getElementById('monthTotal').textContent = formatCurrency(monthTotal);
+
+      const list = document.getElementById('expenseList');
+      const recentExpenses = expenses.slice(0, 10);
+      
+      if (recentExpenses.length === 0) {
+        list.innerHTML = '<div class="empty-state">No expenses yet</div>';
+        document.getElementById('clearBtn').classList.add('hidden');
+      } else {
+        list.innerHTML = recentExpenses.map(e => `
+          <div class="expense-item" onclick="toggleDelete(${e.id})">
+            <span class="emoji">${emojis[e.category]}</span>
+            <div class="details">
+              <div class="desc">${e.description}</div>
+              <div class="date">${e.date}</div>
+            </div>
+            ${selectedId === e.id 
+              ? `<button class="delete-btn" onclick="event.stopPropagation(); deleteExpense(${e.id})">Delete</button>`
+              : `<div class="amount">${formatCurrency(e.amount)}</div>`}
+          </div>
+        `).join('');
+        document.getElementById('clearBtn').classList.remove('hidden');
+      }
+    }
+
+    function addExpense() {
+      const amount = parseFloat(document.getElementById('amountInput').value);
+      if (!amount || amount <= 0) return;
+      
+      const category = document.getElementById('categorySelect').value;
+      const description = document.getElementById('descInput').value || category;
+      
+      expenses.unshift({
+        id: Date.now(),
+        amount,
+        category,
+        description,
+        date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        timestamp: Date.now()
+      });
+      
+      save();
+      renderAddPage();
+      document.getElementById('amountInput').value = '';
+      document.getElementById('descInput').value = '';
+    }
+
+    function toggleDelete(id) { selectedId = selectedId === id ? null : id; renderAddPage(); }
+    function deleteExpense(id) { expenses = expenses.filter(e => e.id !== id); selectedId = null; save(); renderAddPage(); }
+    function clearAll() { if (confirm('Clear all expenses?')) { expenses = []; save(); renderAddPage(); } }
+
+    // Weekly Summary
+    function renderWeekly() {
+      const now = new Date();
+      const weekStart = getWeekStart(now);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      
+      document.getElementById('weekRange').textContent = 
+        `${weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+
+      const weekExpenses = expenses.filter(e => {
+        const d = parseExpenseDate(e);
+        return d >= weekStart && d <= weekEnd;
+      });
+
+      const weekTotal = weekExpenses.reduce((s, e) => s + e.amount, 0);
+      document.getElementById('weekTotal').textContent = formatCurrency(weekTotal);
+
+      // Last week comparison
+      const lastWeekStart = new Date(weekStart);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      const lastWeekEnd = new Date(weekStart);
+      lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+      
+      const lastWeekExpenses = expenses.filter(e => {
+        const d = parseExpenseDate(e);
+        return d >= lastWeekStart && d <= lastWeekEnd;
+      });
+      const lastWeekTotal = lastWeekExpenses.reduce((s, e) => s + e.amount, 0);
+
+      const changeEl = document.getElementById('weekChange');
+      if (lastWeekTotal > 0) {
+        const change = ((weekTotal - lastWeekTotal) / lastWeekTotal * 100).toFixed(0);
+        changeEl.textContent = change >= 0 ? `↑ ${change}% vs last week` : `↓ ${Math.abs(change)}% vs last week`;
+        changeEl.className = 'stat-change ' + (change >= 0 ? 'up' : 'down');
+      } else {
+        changeEl.textContent = 'No data last week';
+        changeEl.className = 'stat-change neutral';
+      }
+
+      const daysWithExpenses = new Set(weekExpenses.map(e => e.date)).size;
+      const avg = daysWithExpenses > 0 ? weekTotal / daysWithExpenses : 0;
+      document.getElementById('weekAvg').textContent = formatCurrency(avg);
+      document.getElementById('weekDays').textContent = `${daysWithExpenses} days with spending`;
+
+      // Daily chart
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dailyData = days.map((_, i) => {
+        const date = new Date(weekStart);
+        date.setDate(date.getDate() + i);
+        const dayExpenses = weekExpenses.filter(e => {
+          const d = parseExpenseDate(e);
+          return d.toDateString() === date.toDateString();
+        });
+        return dayExpenses.reduce((s, e) => s + e.amount, 0);
+      });
+
+      if (charts.weekly) charts.weekly.destroy();
+      charts.weekly = new Chart(document.getElementById('weeklyChart'), {
+        type: 'bar',
+        data: {
+          labels: days,
+          datasets: [{
+            data: dailyData,
+            backgroundColor: '#7c3aed',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+
+      // Categories
+      renderCategoryBreakdown(weekExpenses, 'weekCategories');
+      
+      // Generate spending alerts
+      generateSpendingAlerts(weekExpenses, lastWeekExpenses, 'weekly');
+    }
+
+    function generateSpendingAlerts(currentExpenses, previousExpenses, period) {
+      const alertsContainer = document.getElementById(period === 'weekly' ? 'weeklyAlerts' : 'monthlyAlerts');
+      const savingsContainer = document.getElementById(period === 'weekly' ? 'weeklySavings' : 'monthlySavings');
+      
+      if (currentExpenses.length === 0) {
+        alertsContainer.innerHTML = '';
+        savingsContainer.innerHTML = '';
+        return;
+      }
+
+      const currentCatTotals = currentExpenses.reduce((acc, e) => {
+        acc[e.category] = (acc[e.category] || 0) + e.amount;
+        return acc;
+      }, {});
+
+      const previousCatTotals = previousExpenses.reduce((acc, e) => {
+        acc[e.category] = (acc[e.category] || 0) + e.amount;
+        return acc;
+      }, {});
+
+      const currentTotal = currentExpenses.reduce((s, e) => s + e.amount, 0);
+      const alerts = [];
+      const recommendations = [];
+      let potentialSavings = 0;
+
+      // Analyze each category
+      Object.entries(currentCatTotals).forEach(([cat, amount]) => {
+        const prevAmount = previousCatTotals[cat] || 0;
+        const pctOfTotal = (amount / currentTotal) * 100;
+        const changeVsPrev = prevAmount > 0 ? ((amount - prevAmount) / prevAmount) * 100 : 0;
+
+        // High spending threshold (over 40% of total)
+        if (pctOfTotal > 40) {
+          alerts.push({
+            type: 'danger',
+            icon: emojis[cat],
+            title: `${cat} is ${pctOfTotal.toFixed(0)}% of your spending!`,
+            body: `You've spent <strong>${formatCurrency(amount)}</strong> on ${cat} this ${period === 'weekly' ? 'week' : 'month'}. This is taking up a large portion of your budget.`,
+            tip: getTipForCategory(cat),
+            savings: amount * 0.2 // Suggest 20% reduction
+          });
+          potentialSavings += amount * 0.2;
+          recommendations.push({ cat, suggestion: `Reduce ${cat} by 20%`, savings: amount * 0.2 });
+        }
+        // Significant increase (over 50% vs previous period)
+        else if (changeVsPrev > 50 && prevAmount > 0) {
+          alerts.push({
+            type: 'warning',
+            icon: '📈',
+            title: `${cat} spending up ${changeVsPrev.toFixed(0)}%`,
+            body: `${cat} increased from <strong>${formatCurrency(prevAmount)}</strong> to <strong>${formatCurrency(amount)}</strong> compared to last ${period === 'weekly' ? 'week' : 'month'}.`,
+            tip: getTipForCategory(cat),
+            savings: amount - prevAmount
+          });
+          potentialSavings += (amount - prevAmount) * 0.5;
+          recommendations.push({ cat, suggestion: `Bring ${cat} back to last ${period === 'weekly' ? 'week' : 'month'}'s level`, savings: amount - prevAmount });
+        }
+        // Moderate concern (over 30% of total)
+        else if (pctOfTotal > 30) {
+          alerts.push({
+            type: 'warning',
+            icon: emojis[cat],
+            title: `${cat} is ${pctOfTotal.toFixed(0)}% of spending`,
+            body: `<strong>${formatCurrency(amount)}</strong> on ${cat}. Consider if all these expenses were necessary.`,
+            tip: getTipForCategory(cat),
+            savings: amount * 0.15
+          });
+          potentialSavings += amount * 0.15;
+          recommendations.push({ cat, suggestion: `Cut ${cat} by 15%`, savings: amount * 0.15 });
+        }
+      });
+
+      // Check for good behavior
+      const totalChange = previousExpenses.length > 0 
+        ? ((currentTotal - previousExpenses.reduce((s, e) => s + e.amount, 0)) / previousExpenses.reduce((s, e) => s + e.amount, 0)) * 100 
+        : 0;
+
+      if (totalChange < -10 && previousExpenses.length > 0) {
+        alerts.unshift({
+          type: 'success',
+          icon: '🎉',
+          title: `Great job! Spending down ${Math.abs(totalChange).toFixed(0)}%`,
+          body: `You've reduced your spending compared to last ${period === 'weekly' ? 'week' : 'month'}. Keep up the good work!`,
+          tip: null,
+          savings: 0
+        });
+      }
+
+      // Render alerts
+      alertsContainer.innerHTML = alerts.length > 0 ? `
+        <div class="card-title" style="margin-bottom: 12px; margin-top: 8px;">⚠️ Spending Alerts</div>
+        ${alerts.map(a => `
+          <div class="alert-card ${a.type}">
+            <div class="alert-header">
+              <span class="icon">${a.icon}</span>
+              <span class="title">${a.title}</span>
+            </div>
+            <div class="alert-body">${a.body}</div>
+            ${a.tip ? `<div class="alert-tip">💡 <strong>Tip:</strong> ${a.tip}</div>` : ''}
+          </div>
+        `).join('')}
+      ` : '';
+
+      // Render savings potential
+      if (potentialSavings > 0 && recommendations.length > 0) {
+        savingsContainer.innerHTML = `
+          <div class="savings-card">
+            <div class="savings-header">
+              <span class="icon">🎯</span>
+              <span class="title">Potential Savings</span>
+            </div>
+            <div class="savings-amount">${formatCurrency(potentialSavings)}</div>
+            <div class="savings-text">You could save this much ${period === 'weekly' ? 'per week' : 'per month'} by following these recommendations:</div>
+            <div class="recommendation-list">
+              ${recommendations.slice(0, 3).map(r => `
+                <div class="recommendation-item">
+                  <span class="bullet">•</span>
+                  <span>${r.suggestion} → Save <strong style="color: #4ade80;">${formatCurrency(r.savings)}</strong></span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        savingsContainer.innerHTML = '';
+      }
+    }
+
+    function getTipForCategory(category) {
+      const tips = {
+        'Food': 'Try meal prepping, cooking at home, or setting a weekly food budget. Avoid impulsive food delivery orders.',
+        'Transport': 'Consider carpooling, using public transport, or combining trips to save on fuel and fares.',
+        'Shopping': 'Make a list before shopping and stick to it. Wait 24 hours before making non-essential purchases.',
+        'Bills': 'Review subscriptions you might not need. Compare providers for better rates on utilities.',
+        'Entertainment': 'Look for free activities, use streaming services instead of going out, or set a monthly entertainment budget.',
+        'Health': 'Check if generic medications are available. Use preventive care to avoid costly treatments.',
+        'Other': 'Track these expenses more carefully to understand where the money is going.'
+      };
+      return tips[category] || tips['Other'];
+    }
+
+    // Monthly Summary
+    function renderMonthly() {
+      const now = new Date();
+      document.getElementById('monthName').textContent = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+      const currentMonth = now.toLocaleDateString('en-GB', { month: 'short' });
+      const monthExpenses = expenses.filter(e => e.date.includes(currentMonth));
+      const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0);
+      
+      document.getElementById('monthTotalStat').textContent = formatCurrency(monthTotal);
+      document.getElementById('monthTxCount').textContent = monthExpenses.length;
+      document.getElementById('monthAvgTx').textContent = monthExpenses.length > 0 
+        ? `Avg ${formatCurrency(monthTotal / monthExpenses.length)}/tx` : 'No transactions';
+
+      // Last month comparison
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthStr = lastMonth.toLocaleDateString('en-GB', { month: 'short' });
+      const lastMonthExpenses = expenses.filter(e => e.date.includes(lastMonthStr));
+      const lastMonthTotal = lastMonthExpenses.reduce((s, e) => s + e.amount, 0);
+
+      const changeEl = document.getElementById('monthChange');
+      if (lastMonthTotal > 0) {
+        const change = ((monthTotal - lastMonthTotal) / lastMonthTotal * 100).toFixed(0);
+        changeEl.textContent = change >= 0 ? `↑ ${change}% vs last month` : `↓ ${Math.abs(change)}% vs last month`;
+        changeEl.className = 'stat-change ' + (change >= 0 ? 'up' : 'down');
+      } else {
+        changeEl.textContent = 'No data last month';
+        changeEl.className = 'stat-change neutral';
+      }
+
+      // Weekly breakdown chart
+      const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+      const weeklyData = weeks.map((_, i) => {
+        return monthExpenses.filter(e => {
+          const day = parseInt(e.date.split(' ')[0]);
+          const weekNum = Math.floor((day - 1) / 7);
+          return weekNum === i;
+        }).reduce((s, e) => s + e.amount, 0);
+      });
+
+      if (charts.monthly) charts.monthly.destroy();
+      charts.monthly = new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: {
+          labels: weeks,
+          datasets: [{
+            data: weeklyData,
+            backgroundColor: '#4f46e5',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+
+      renderCategoryBreakdown(monthExpenses, 'monthCategories');
+      
+      // Generate spending alerts for monthly
+      generateSpendingAlerts(monthExpenses, lastMonthExpenses, 'monthly');
+    }
+
+    function renderCategoryBreakdown(expenseList, containerId) {
+      const catTotals = expenseList.reduce((acc, e) => {
+        acc[e.category] = (acc[e.category] || 0) + e.amount;
+        return acc;
+      }, {});
+
+      const total = Object.values(catTotals).reduce((s, v) => s + v, 0);
+      const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+
+      document.getElementById(containerId).innerHTML = sorted.length > 0 ? sorted.map(([cat, amount]) => `
+        <div class="category-row">
+          <div class="category-info">
+            <span style="font-size: 20px;">${emojis[cat]}</span>
+            <div>
+              <div style="font-weight: 500;">${cat}</div>
+              <div style="font-size: 12px; color: #94a3b8;">${((amount / total) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+          <div style="font-weight: 600;">${formatCurrency(amount)}</div>
+        </div>
+        <div class="category-bar">
+          <div class="category-bar-fill" style="width: ${(amount / total) * 100}%; background: ${colors[cat]};"></div>
+        </div>
+      `).join('') : '<div class="empty-state">No expenses</div>';
+    }
+
+    // Dashboard
+    function setDashboardPeriod(period) {
+      dashboardPeriod = period;
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderDashboard();
+    }
+
+    function renderDashboard() {
+      const now = new Date();
+      let filteredExpenses = expenses;
+
+      if (dashboardPeriod === 'week') {
+        const weekStart = getWeekStart(now);
+        filteredExpenses = expenses.filter(e => parseExpenseDate(e) >= weekStart);
+      } else if (dashboardPeriod === 'month') {
+        const currentMonth = now.toLocaleDateString('en-GB', { month: 'short' });
+        filteredExpenses = expenses.filter(e => e.date.includes(currentMonth));
+      }
+
+      const total = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+      const biggest = filteredExpenses.length > 0 ? Math.max(...filteredExpenses.map(e => e.amount)) : 0;
+      const avg = filteredExpenses.length > 0 ? total / filteredExpenses.length : 0;
+
+      document.getElementById('dashTotal').textContent = formatCurrency(total);
+      document.getElementById('dashTxCount').textContent = filteredExpenses.length;
+      document.getElementById('dashBiggest').textContent = formatCurrency(biggest);
+      document.getElementById('dashAvg').textContent = formatCurrency(avg);
+
+      // Pie chart
+      const catTotals = filteredExpenses.reduce((acc, e) => {
+        acc[e.category] = (acc[e.category] || 0) + e.amount;
+        return acc;
+      }, {});
+
+      if (charts.pie) charts.pie.destroy();
+      const pieLabels = Object.keys(catTotals);
+      const pieData = Object.values(catTotals);
+      const pieColors = pieLabels.map(c => colors[c]);
+
+      charts.pie = new Chart(document.getElementById('categoryPieChart'), {
+        type: 'doughnut',
+        data: {
+          labels: pieLabels.map(l => emojis[l] + ' ' + l),
+          datasets: [{
+            data: pieData,
+            backgroundColor: pieColors,
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: '#cbd5e1', padding: 12, font: { size: 11 } } }
+          }
+        }
+      });
+
+      // Trend chart
+      const last7Days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        last7Days.push(d);
+      }
+
+      const trendData = last7Days.map(date => {
+        return expenses.filter(e => {
+          const d = parseExpenseDate(e);
+          return d.toDateString() === date.toDateString();
+        }).reduce((s, e) => s + e.amount, 0);
+      });
+
+      if (charts.trend) charts.trend.destroy();
+      charts.trend = new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: {
+          labels: last7Days.map(d => d.toLocaleDateString('en-GB', { weekday: 'short' })),
+          datasets: [{
+            data: trendData,
+            borderColor: '#7c3aed',
+            backgroundColor: 'rgba(124, 58, 237, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#7c3aed'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+
+      // Insights
+      generateInsights(filteredExpenses);
+    }
+
+    function generateInsights(expenseList) {
+      const insights = [];
+      
+      if (expenseList.length === 0) {
+        insights.push({ icon: '📝', text: 'Start adding expenses to see insights!' });
+      } else {
+        const catTotals = expenseList.reduce((acc, e) => {
+          acc[e.category] = (acc[e.category] || 0) + e.amount;
+          return acc;
+        }, {});
+        
+        const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0];
+        if (topCat) {
+          const pct = ((topCat[1] / expenseList.reduce((s, e) => s + e.amount, 0)) * 100).toFixed(0);
+          insights.push({ 
+            icon: emojis[topCat[0]], 
+            text: `<strong>${topCat[0]}</strong> is your biggest category at <strong>${pct}%</strong> of spending (${formatCurrency(topCat[1])})` 
+          });
+        }
+
+        const biggest = expenseList.reduce((max, e) => e.amount > max.amount ? e : max, expenseList[0]);
+        insights.push({ 
+          icon: '💰', 
+          text: `Biggest expense: <strong>${biggest.description}</strong> at <strong>${formatCurrency(biggest.amount)}</strong>` 
+        });
+
+        const avg = expenseList.reduce((s, e) => s + e.amount, 0) / expenseList.length;
+        insights.push({ 
+          icon: '📈', 
+          text: `You're averaging <strong>${formatCurrency(avg)}</strong> per transaction` 
+        });
+
+        if (expenseList.length >= 5) {
+          insights.push({ 
+            icon: '🎯', 
+            text: `You've logged <strong>${expenseList.length} expenses</strong>. Great tracking!` 
+          });
+        }
+      }
+
+      document.getElementById('insights').innerHTML = insights.map(i => `
+        <div class="insight-item">
+          <div class="insight-icon">${i.icon}</div>
+          <div class="insight-text">${i.text}</div>
+        </div>
+      `).join('');
+    }
+
+    // Receipt scanning
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const btn = document.getElementById('scanBtn');
+      const errorMsg = document.getElementById('errorMsg');
+      btn.classList.add('scanning');
+      btn.innerHTML = '<div class="spinner"></div><span>Scanning...</span>';
+      errorMsg.classList.add('hidden');
+
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsDataURL(file);
+        });
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
+                { type: 'text', text: 'Analyze this receipt/bill. Return ONLY JSON: {"amount": <number>, "category": "<Food|Transport|Shopping|Bills|Entertainment|Health|Other>", "description": "<merchant>"}' }
+              ]
+            }]
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+
+        const match = (data.content?.[0]?.text || '').match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          document.getElementById('amountInput').value = parsed.amount || '';
+          document.getElementById('categorySelect').value = ['Food','Transport','Shopping','Bills','Entertainment','Health','Other'].includes(parsed.category) ? parsed.category : 'Other';
+          document.getElementById('descInput').value = parsed.description || '';
+        } else {
+          throw new Error('Could not parse receipt');
+        }
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Failed to scan';
+        errorMsg.classList.remove('hidden');
+      } finally {
+        btn.classList.remove('scanning');
+        btn.innerHTML = '<span style="font-size: 20px;">📷</span><span>Scan Receipt</span>';
+        e.target.value = '';
+      }
+    });
+
+    document.getElementById('descInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addExpense(); });
+    
+    // Initialize
+    renderAddPage();
+  </script>
+</body>
+</html>
